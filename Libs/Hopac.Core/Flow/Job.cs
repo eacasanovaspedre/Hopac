@@ -1,5 +1,7 @@
 // Copyright (C) by Housemarque, Inc.
 
+using System.Xml.Resolvers;
+
 namespace Hopac {
   using Microsoft.FSharp.Core;
   using Hopac.Core;
@@ -7,7 +9,7 @@ namespace Hopac {
   using System;
 
   /// <summary>Represents a lightweight thread of execution.</summary>
-  public abstract class Job<T> {
+  public abstract partial class Job<T> {
     internal abstract void DoJob(ref Worker wr, Cont<T> aK);
   }
 
@@ -508,6 +510,45 @@ namespace Hopac {
       ///
       internal override void DoJob(ref Worker wr, Cont<ulong> rK) {
         Cont.Do(rK, ref wr, Randomizer.Next(ref wr.RandomLo, ref wr.RandomHi));
+      }
+    }
+
+    public class TryFinallyFunCont<X> : Cont<X>
+    {
+      private readonly FSharpFunc<Unit, Unit> u2u;
+      private Cont<X> xK;
+
+      public TryFinallyFunCont(FSharpFunc<Unit, Unit> u2U, Cont<X> xK)
+      {
+        u2u = u2U;
+        this.xK = xK;
+      }
+
+      internal override void DoHandle(ref Worker wr, Exception e)
+      {
+        var xK = this.xK;
+        wr.Handler = xK;
+        u2u.Invoke(null);
+        Handler.DoHandle(xK, ref wr, e);
+      }
+
+      internal override Proc GetProc(ref Worker wr) =>
+        Handler.GetProc(ref wr, ref xK);
+
+      internal override void DoWork(ref Worker wr)
+      {
+        var xK = this.xK;
+        wr.Handler = xK;
+        u2u.Invoke(null);
+        xK.DoCont(ref wr, Value);
+      }
+
+      internal override void DoCont(ref Worker wr, X x)
+      {
+        var xK = this.xK;
+        wr.Handler = xK;
+        u2u.Invoke(null);
+        xK.DoCont(ref wr, x);
       }
     }
   }

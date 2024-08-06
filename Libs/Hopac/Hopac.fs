@@ -9,6 +9,7 @@ open System.Runtime.CompilerServices
 open System.Threading
 open System.Threading.Tasks
 open Hopac.Core
+open Hopac.Core.Abstractions
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -56,28 +57,6 @@ module MoreUtil =
      let yK = xK'.yK
      wr.Handler <- yK
      (xK'.x2yJ x).DoJob (&wr, yK)
-
-  type TryFinallyFunCont<'x> =
-    inherit Cont<'x>
-    val u2u: unit -> unit
-    val mutable xK: Cont<'x>
-    new (u2u, xK) = {inherit Cont<'x> (); u2u=u2u; xK=xK}
-    override xK'.GetProc (wr) = Handler.GetProc (&wr, &xK'.xK)
-    override xK'.DoHandle (wr, e) =
-      let xK = xK'.xK
-      wr.Handler <- xK
-      xK'.u2u ()
-      Handler.DoHandle (xK, &wr, e)
-    override xK'.DoWork (wr) =
-      let xK = xK'.xK
-      wr.Handler <- xK
-      xK'.u2u ()
-      xK.DoCont (&wr, xK'.Value)
-    override xK'.DoCont (wr, x) =
-      let xK = xK'.xK
-      wr.Handler <- xK
-      xK'.u2u ()
-      xK.DoCont (&wr, x)
 
   type DropCont<'x, 'y> =
     inherit Cont<'y>
@@ -173,24 +152,14 @@ module IVar =
 ////////////////////////////////////////////////////////////////////////////////
 
 module Infixes =
-  let inline (>>=) (xJ: Job<'x>) (x2yJ: 'x -> #Job<'y>) =
-    {new JobCont<'x, 'y> () with
-      override yJ'.Do () =
-        upcast {new ContBind<'x, 'y> () with
-          override xK'.Do (x) =
-            upcast x2yJ x}}.InternalInit(xJ)
+  let inline (>>=) (xJ: Job<'x>) (x2yJ: 'x -> #Job<'y>) = Job.(>>=) (xJ, x2yJ)
 
   let (>>=.) (xJ: Job<_>) (yJ: Job<'y>) =
     {new Job<'y> () with
       override yJ'.DoJob (wr, yK) =
        xJ.DoJob (&wr, SeqCont (yJ, yK))}
 
-  let inline (>>-) (xJ: Job<'x>) (x2y: 'x -> 'y) =
-    {new JobCont<'x, 'y> () with
-      override yJ'.Do () =
-        upcast {new ContMap<'x, 'y> () with
-          override xK'.Do (x) =
-            x2y x}}.InternalInit(xJ)
+  let inline (>>-) (xJ: Job<'x>) (x2y: 'x -> 'y) = Job.Map (xJ, x2y)
 
   let (>>-.) (xJ: Job<_>) (y: 'y) =
     {new Job<'y> () with
@@ -215,25 +184,8 @@ module Infixes =
   let inline (>=>.) x2yJ zJ x = x2yJ x >>=. zJ
   let inline (>->.) x2yJ z x = x2yJ x >>-. z
 
-  type PairCont2<'x, 'y> (x: 'x, xyK: Cont<'x * 'y>) =
-    inherit Cont<'y> ()
-    override yK'.GetProc (wr) = xyK.GetProc (&wr)
-    override yK'.DoHandle (wr, e) = xyK.DoHandle (&wr, e)
-    override yK'.DoWork (wr) = xyK.DoCont (&wr, (x, yK'.Value))
-    override yK'.DoCont (wr, y) = xyK.DoCont (&wr, (x, y))
-
-  type PairCont<'x, 'y> (yJ: Job<'y>, xyK: Cont<'x * 'y>) =
-    inherit Cont<'x> ()
-    override xK'.GetProc (wr) = xyK.GetProc (&wr)
-    override xK'.DoHandle (wr, e) = xyK.DoHandle (&wr, e)
-    override xK'.DoWork (wr) =
-      yJ.DoJob (&wr, PairCont2<'x, 'y> (xK'.Value, xyK))
-    override xK'.DoCont (wr, x) = yJ.DoJob (&wr, PairCont2<'x, 'y> (x, xyK))
-
   let (<&>) (xJ: Job<'x>) (yJ: Job<'y>) =
-    {new Job<'x * 'y> () with
-      override xyJ'.DoJob (wr, xyK) =
-       xJ.DoJob (&wr, PairCont (yJ, xyK))}
+    Job.Zip (xJ, yJ)
 
   let (<*>) (xJ: Job<'x>) (yJ: Job<'y>) =
     {new Job<'x * 'y> () with
@@ -892,10 +844,7 @@ module Job =
 
   //////////////////////////////////////////////////////////////////////////////
 
-  let inline delay (u2xJ: unit -> #Job<'x>) =
-    {new JobDelay<'x> () with
-      override xJ'.Do () =
-       upcast u2xJ ()} :> Job<_>
+  let inline delay (u2xJ: unit -> #Job<'x>) = Job.Delay u2xJ
 
   let inline delayWith (x2yJ: 'x -> #Job<'y>) (x: 'x) =
     {new JobDelay<'y> () with
@@ -990,38 +939,16 @@ module Job =
   let inline whileDo cond (uJ: Job<unit>) =
     whileDoIgnore cond uJ
 
-  let result (x: 'x) =
-    // XXX Does this speed things up?
-    if sizeof<IntPtr> <> 8 || StaticData.isMono then
-      {new Job<'x> () with
-        override self.DoJob (wr, xK) =
-         Cont.Do (xK, &wr, x)}
-    else
-      {new Job<'x> () with
-        override self.DoJob (wr, xK) =
-         xK.DoCont (&wr, x)}
+  let result (x: 'x) = Job.Return x
 
   let inline bind (x2yJ: 'x -> #Job<'y>) (xJ: Job<'x>) = xJ >>= x2yJ
 
-  let inline join (xJJ: Job<#Job<'x>>) = JobJoin<_, _>().InternalInit(xJJ)
+  let inline join (xJJ: Job<#Job<'x>>) = Job.Join xJJ
 
   let inline map (x2y: 'x -> 'y) (xJ: Job<'x>) = xJ >>- x2y
 
-  let inline applyMap (wr: byref<_>) x2y (xJ: Job<_>) (yK: Cont<_>) =
-    xJ.DoJob (&wr, {new Cont<_> () with
-      override xK'.GetProc (wr) = yK.GetProc (&wr)
-      override xK'.DoHandle (wr, e) = yK.DoHandle (&wr, e)
-      override xK'.DoWork (wr) = Cont.Do (yK, &wr, x2y xK'.Value)
-      override xK'.DoCont (wr, x) = Cont.Do (yK, &wr, x2y x)})
-
   let apply (xJ: Job<'x>) (x2yJ: Job<'x -> 'y>) =
-    {new Job<_> () with
-      override yJ'.DoJob (wr, yK) =
-        x2yJ.DoJob (&wr, {new Cont<_> () with
-          override x2yK'.GetProc (wr) = yK.GetProc (&wr)
-          override x2yK'.DoHandle (wr, e) = yK.DoHandle (&wr, e)
-          override x2yK'.DoWork (wr) = applyMap &wr x2yK'.Value xJ yK
-          override x2yK'.DoCont (wr, x2y) = applyMap &wr x2y xJ yK})}
+    Job.(<*>) (x2yJ, xJ)
 
   let inline unit () = Alt.unit () :> Job<_>
 
@@ -1071,10 +998,7 @@ module Job =
        override xK'.DoExn (e) = upcast e2xJ e}}.InternalInit(xJ)
 
   let inline tryWithDelay (u2xJ: unit -> #Job<'x>) (e2xJ: exn -> #Job<'x>) =
-    {new JobTryWithDelay<'x> () with
-      override xJ'.Do () = upcast u2xJ ()
-      override xJ'.DoCont() = {new ContTryWith<'x> () with
-       override xK'.DoExn (e) = upcast e2xJ e}} :> Job<_>
+    Job.TryWith(u2xJ, e2xJ)
 
   let tryFinallyFun (xJ: Job<'x>) (u2u: unit -> unit) =
     {new Job<'x> () with
@@ -1084,11 +1008,7 @@ module Job =
        xJ.DoJob (&wr, xK')}
 
   let tryFinallyFunDelay (u2xJ: unit -> #Job<'x>) (u2u: unit -> unit) =
-    {new Job<'x> () with
-      override xJ'.DoJob (wr, xK_) =
-       let xK' = TryFinallyFunCont (u2u, xK_)
-       wr.Handler <- xK'
-       u2xJ().DoJob (&wr, xK')}
+    Job.TryFinally(u2xJ, u2u)
 
   let tryFinallyJob (xJ: Job<'x>) (uJ: Job<unit>) =
     {new Job<'x> () with
