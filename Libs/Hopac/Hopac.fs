@@ -223,10 +223,7 @@ module Infixes =
      override xE'.TryElse (wr, i) =
       xA2.TryAlt (&wr, i, xK, xE)}.Init(xE.pk))
 
-  let (<|>) (xA1: Alt<'x>) (xA2: Alt<'x>) =
-    {new Alt<'x> () with
-      override xA'.DoJob (wr, xK) = either &wr xK xA1 xA2
-      override xA'.TryAlt (wr, i, xK, xE) = eitherOr &wr i xK xE xA1 xA2}
+  let (<|>) (xA1: Alt<'x>) (xA2: Alt<'x>) = Alt.(<|>) (xA1, xA2)
 
   let (<~>) (xA1: Alt<'x>) (xA2: Alt<'x>) =
     {new Alt<'x> () with
@@ -239,11 +236,7 @@ module Infixes =
        then eitherOr &wr i xK xE xA1 xA2
        else eitherOr &wr i xK xE xA2 xA1}
 
-  let inline (^->) (xA: Alt<'x>) (x2y: 'x -> 'y) =
-    {new AltAfter<'x, 'y> () with
-      override yA'.Do () =
-        upcast {new ContMap<'x, 'y> () with
-          override xK'.Do (x) = x2y x}}.InternalInit(xA)
+  let inline (^->) (xA: Alt<'x>) (x2y: 'x -> 'y) = Alt.Map (xA, x2y)
 
   let inline (^=>) (xA: Alt<'x>) (x2yJ: 'x -> #Job<'y>) =
     {new AltAfter<'x, 'y> () with

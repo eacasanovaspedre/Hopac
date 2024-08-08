@@ -16,6 +16,9 @@ namespace Hopac
                 ? new JobReturnMono<T>(x)
                 : (Job<T>)new JobReturn<T>(x);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Job<Unit> Return(Unit x) => Alt<T>.Return((Unit) null);
+
         [SpecialName]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Job<U> op_GreaterGreaterEquals<U, J>(Job<T> job, FSharpFunc<T, J> f) where J : Job<U> =>
