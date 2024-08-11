@@ -2,7 +2,6 @@
 using Hopac.Core.Abstractions;
 using Microsoft.FSharp.Core;
 using System.Runtime.CompilerServices;
-using System.Runtime.ExceptionServices;
 using Hopac.Core;
 
 namespace Hopac
@@ -240,18 +239,19 @@ namespace Hopac
 
                 internal override Proc GetProc(ref Worker wr) => yK.GetProc(ref wr);
 
-                internal override void DoWork(ref Worker wr) => ApplyMap(ref wr, this.Value, xJ, yK);
+                internal override void DoWork(ref Worker wr) => ApplyMap(ref wr, this.Value);
 
-                internal override void DoCont(ref Worker wr, FSharpFunc<X, Y> x2y) => ApplyMap(ref wr, x2y, xJ, yK);
+                internal override void DoCont(ref Worker wr, FSharpFunc<X, Y> x2y) => ApplyMap(ref wr, x2y);
 
                 class ApplyMapCont : Cont<X>
                 {
                     private readonly Cont<Y> yK;
                     private readonly FSharpFunc<X, Y> x2y;
 
-                    public ApplyMapCont(Cont<Y> yK)
+                    public ApplyMapCont(Cont<Y> yK, FSharpFunc<X, Y> x2y)
                     {
                         this.yK = yK;
+                        this.x2y = x2y;
                     }
 
                     internal override void DoHandle(ref Worker wr, Exception e) => yK.DoHandle(ref wr, e);
@@ -264,8 +264,8 @@ namespace Hopac
                 }
 
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                private void ApplyMap(ref Worker wr, FSharpFunc<X, Y> x2y, Job<X> xJ, Cont<Y> yK) =>
-                    xJ.DoJob(ref wr, new ApplyMapCont(yK));
+                private void ApplyMap(ref Worker wr, FSharpFunc<X, Y> x2y) =>
+                    xJ.DoJob(ref wr, new ApplyMapCont(yK, x2y));
             }
         }
 

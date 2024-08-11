@@ -1,5 +1,4 @@
 ﻿using Hopac.Core;
-using Hopac.Core.Abstractions;
 using Microsoft.FSharp.Core;
 using System.Runtime.CompilerServices;
 
@@ -8,16 +7,13 @@ namespace Hopac
     public abstract partial class Alt<T>
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Alt<T> Return(T x) => new Always<T>(x);
+        public new static Alt<T> Return(T x) => new Always<T>(x);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Alt<Unit> Return(Unit x)
+        public new static Alt<Unit> Return(Unit x)
         {
-            if (StaticData.unit == null)
-            {
-                StaticData.Init();
-                return StaticData.unit;
-            }
+            if (StaticData.unit != null) return StaticData.unit;
+            StaticData.Init();
             return StaticData.unit;
         }
 
@@ -29,7 +25,7 @@ namespace Hopac
 
         [SpecialName]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Alt<T> op_LessBarGreater<U>(Alt<T> xA1, Alt<T> xA2) => new Alt_Alternative<T>(xA1, xA2);
+        public static Alt<T> op_LessBarGreater(Alt<T> xA1, Alt<T> xA2) => new Alt_Alternative<T>(xA1, xA2);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static void Either(ref Worker wr, Cont<T> xK, Alt<T> xA1, Alt<T> xA2) =>
@@ -69,10 +65,11 @@ namespace Hopac
 
             internal override void TryElse(ref Worker wr, int i)
             {
-                if (this.State1 != null)
+                if (State1 != null)
                 {
-                    this.State1 = null;
-                    this.State1.TryAlt(ref wr, i, xK, this);
+                    var state = State1;
+                    State1 = null;
+                    state.TryAlt(ref wr, i, xK, this);
                 }
             }
         }
@@ -102,9 +99,9 @@ namespace Hopac
                 this.x2y = x2y;
             }
 
-            public override JobContCont<X, Y> Do() => new ContMapImpl<Y>(x2y);
+            public override JobContCont<X, Y> Do() => new ContMapImpl(x2y);
 
-            internal class ContMapImpl<Y> : ContMap<X, Y>
+            internal class ContMapImpl : ContMap<X, Y>
             {
                 private readonly FSharpFunc<X, Y> x2y;
 
