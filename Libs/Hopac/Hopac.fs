@@ -152,14 +152,15 @@ module IVar =
 ////////////////////////////////////////////////////////////////////////////////
 
 module Infixes =
-  let inline (>>=) (xJ: Job<'x>) (x2yJ: 'x -> #Job<'y>) = Job.(>>=) (xJ, x2yJ)
+  let inline (>>=) (xJ: Job<'x>) (x2yJ: 'x -> #Job<'y>) =
+    JobBind<_, _, _>(x2yJ).InternalInit(xJ)
 
   let (>>=.) (xJ: Job<_>) (yJ: Job<'y>) =
     {new Job<'y> () with
       override yJ'.DoJob (wr, yK) =
        xJ.DoJob (&wr, SeqCont (yJ, yK))}
 
-  let inline (>>-) (xJ: Job<'x>) (x2y: 'x -> 'y) = Job.Map (xJ, x2y)
+  let inline (>>-) (xJ: Job<'x>) (x2y: 'x -> 'y) = JobMap<_, _>(x2y).InternalInit(xJ)
 
   let (>>-.) (xJ: Job<_>) (y: 'y) =
     {new Job<'y> () with
@@ -185,7 +186,7 @@ module Infixes =
   let inline (>->.) x2yJ z x = x2yJ x >>-. z
 
   let (<&>) (xJ: Job<'x>) (yJ: Job<'y>) =
-    Job.Zip (xJ, yJ)
+    JobZip<_, _>(xJ, yJ) :> Job<_>
 
   let (<*>) (xJ: Job<'x>) (yJ: Job<'y>) =
     {new Job<'x * 'y> () with
@@ -223,7 +224,7 @@ module Infixes =
      override xE'.TryElse (wr, i) =
       xA2.TryAlt (&wr, i, xK, xE)}.Init(xE.pk))
 
-  let (<|>) (xA1: Alt<'x>) (xA2: Alt<'x>) = Alt.(<|>) (xA1, xA2)
+  let (<|>) (xA1: Alt<'x>) (xA2: Alt<'x>) = Alt_Alternative<_>(xA1, xA2) :> Alt<_>
 
   let (<~>) (xA1: Alt<'x>) (xA2: Alt<'x>) =
     {new Alt<'x> () with
@@ -236,7 +237,7 @@ module Infixes =
        then eitherOr &wr i xK xE xA1 xA2
        else eitherOr &wr i xK xE xA2 xA1}
 
-  let inline (^->) (xA: Alt<'x>) (x2y: 'x -> 'y) = Alt.Map (xA, x2y)
+  let inline (^->) (xA: Alt<'x>) (x2y: 'x -> 'y) = AltAfterFun<_, _>(x2y).InternalInit(xA)
 
   let inline (^=>) (xA: Alt<'x>) (x2yJ: 'x -> #Job<'y>) =
     {new AltAfter<'x, 'y> () with
@@ -837,7 +838,7 @@ module Job =
 
   //////////////////////////////////////////////////////////////////////////////
 
-  let inline delay (u2xJ: unit -> #Job<'x>) = Job.Delay u2xJ
+  let inline delay (u2xJ: unit -> #Job<'x>) = JobDelayImpl<_, _>(u2xJ) :> Job<_>
 
   let inline delayWith (x2yJ: 'x -> #Job<'y>) (x: 'x) =
     {new JobDelay<'y> () with
@@ -932,16 +933,25 @@ module Job =
   let inline whileDo cond (uJ: Job<unit>) =
     whileDoIgnore cond uJ
 
-  let result (x: 'x) = Job.Return x
+  let result (x: 'x) =
+    // XXX Does this speed things up?
+    if sizeof<IntPtr> <> 8 || StaticData.isMono then
+      {new Job<'x> () with
+        override self.DoJob (wr, xK) =
+         Cont.Do (xK, &wr, x)}
+    else
+      {new Job<'x> () with
+        override self.DoJob (wr, xK) =
+         xK.DoCont (&wr, x)}
 
   let inline bind (x2yJ: 'x -> #Job<'y>) (xJ: Job<'x>) = xJ >>= x2yJ
 
-  let inline join (xJJ: Job<#Job<'x>>) = Job.Join xJJ
+  let inline join (xJJ: Job<#Job<'x>>) = JobJoin<_, _>().InternalInit(xJJ)
 
   let inline map (x2y: 'x -> 'y) (xJ: Job<'x>) = xJ >>- x2y
 
   let apply (xJ: Job<'x>) (x2yJ: Job<'x -> 'y>) =
-    Job.(<*>) (x2yJ, xJ)
+    JobApply<_, _>(xJ, x2yJ) :> Job<_>
 
   let inline unit () = Alt.unit () :> Job<_>
 
@@ -991,7 +1001,7 @@ module Job =
        override xK'.DoExn (e) = upcast e2xJ e}}.InternalInit(xJ)
 
   let inline tryWithDelay (u2xJ: unit -> #Job<'x>) (e2xJ: exn -> #Job<'x>) =
-    Job.TryWith(u2xJ, e2xJ)
+    JobTryWithDelayImpl<_, _, _>(u2xJ, e2xJ) :> Job<_>
 
   let tryFinallyFun (xJ: Job<'x>) (u2u: unit -> unit) =
     {new Job<'x> () with
@@ -1001,7 +1011,7 @@ module Job =
        xJ.DoJob (&wr, xK')}
 
   let tryFinallyFunDelay (u2xJ: unit -> #Job<'x>) (u2u: unit -> unit) =
-    Job.TryFinally(u2xJ, u2u)
+    JobTryFinally<_, _>(u2xJ, u2u) :> Job<_>
 
   let tryFinallyJob (xJ: Job<'x>) (uJ: Job<unit>) =
     {new Job<'x> () with
