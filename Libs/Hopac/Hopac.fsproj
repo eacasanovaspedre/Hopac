@@ -1,13 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netstandard2.1</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <DebugType>Embedded</DebugType>
     <EmbedAllSources>True</EmbedAllSources>
     <OtherFlags>--warnon:1182</OtherFlags>
-    <NoWarn>FS0044</NoWarn>
+    <NoWarn>FS0044;FS0057</NoWarn>
     <Description>Hopac is a library for higher-Order, parallel, asynchronous and concurrent programming in F#.
 
 Inspired by languages like Concurrent ML and Cilk, Hopac is a library for F# with the aim of making it easier to write efficient parallel, asynchronous, concurrent and reactive programs. Hopac is licensed under a MIT-style license. See project website for further information.</Description>
@@ -47,27 +47,27 @@ Inspired by languages like Concurrent ML and Cilk, Hopac is a library for F# wit
 
   <ItemGroup>
     <Content Include="$(OutDir)\Hopac.Core.dll">
-      <PackagePath>lib\netstandard2.0\</PackagePath>
+      <PackagePath>lib\netstandard2.1\</PackagePath>
       <Pack>true</Pack>
     </Content>
     <Content Include="$(OutDir)\Hopac.Core.pdb">
-      <PackagePath>lib\netstandard2.0\</PackagePath>
+      <PackagePath>lib\netstandard2.1\</PackagePath>
       <Pack>true</Pack>
     </Content>
     <Content Include="$(OutDir)\Hopac.Core.xml">
-      <PackagePath>lib\netstandard2.0\</PackagePath>
+      <PackagePath>lib\netstandard2.1\</PackagePath>
       <Pack>true</Pack>
     </Content>
     <Content Include="$(OutDir)\Hopac.Platform.dll">
-      <PackagePath>lib\netstandard2.0\</PackagePath>
+      <PackagePath>lib\netstandard2.1\</PackagePath>
       <Pack>true</Pack>
     </Content>
     <Content Include="$(OutDir)\Hopac.Platform.pdb">
-      <PackagePath>lib\netstandard2.0\</PackagePath>
+      <PackagePath>lib\netstandard2.1\</PackagePath>
       <Pack>true</Pack>
     </Content>
     <Content Include="$(OutDir)\Hopac.Platform.xml">
-      <PackagePath>lib\netstandard2.0\</PackagePath>
+      <PackagePath>lib\netstandard2.1\</PackagePath>
       <Pack>true</Pack>
     </Content>
   </ItemGroup>

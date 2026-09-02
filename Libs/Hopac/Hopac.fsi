@@ -158,6 +158,9 @@ type IAsyncDisposable =
 ///
 /// If you ran the above above examples, you just did the equivalent of running
 /// roughly your first million parallel jobs using Hopac.
+///
+/// Static members on `Job<_>` exist so FSharpPlus can use `monad { }`. They are
+/// not replacements for `Job.result` / `Job.bind`.
 type Job<'x>
 #endif
 
@@ -752,6 +755,16 @@ module Job =
   /// Creates a job that calls the given function to start a task and waits for
   /// it to complete.  See also: `Alt.fromUnitTask`.
   val inline fromUnitTask: (unit -> Task)     -> Job<unit>
+  
+  /// Creates a job that calls the given function to start a value task and waits for
+  /// it to complete.  See also: `Alt.fromValueTask`.
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  val inline fromValueTask:     (unit -> ValueTask<'x>) -> Job<'x>
+
+  /// Creates a job that calls the given function to start a value task and waits for
+  /// it to complete.  See also: `Alt.fromUnitValueTask`.
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  val inline fromUnitValueTask: (unit -> ValueTask)     -> Job<unit>
 
   /// `liftTask x2yT` is equivalent to `fun x -> fromTask <| fun () -> x2yT x`.
   val inline liftTask:     ('x -> Task<'y>) -> 'x -> Job<'y>
@@ -759,6 +772,15 @@ module Job =
   /// `liftUnitTask x2uT` is equivalent to `fun x -> fromUnitTask <| fun () ->
   /// x2uT x`.
   val inline liftUnitTask: ('x -> Task)     -> 'x -> Job<unit>
+  
+  /// `liftValueTask x2yT` is equivalent to `fun x -> fromValueTask <| fun () -> x2yT x`.
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  val inline liftValueTask:     ('x -> ValueTask<'y>) -> 'x -> Job<'y>
+
+  /// `liftUnitValueTask x2uT` is equivalent to `fun x -> fromUnitValueTask <| fun () ->
+  /// x2uT x`.
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  val inline liftUnitValueTask: ('x -> ValueTask)     -> 'x -> Job<unit>
 
   /// Creates a job that waits for the given task to finish and then returns the
   /// result of the task.  Note that this does not start the task.  Make sure
@@ -817,6 +839,22 @@ module Job =
   /// the `Job` context.
 #endif
   val inline awaitUnitTask: Task     -> Job<unit>
+  
+  /// Creates a job that waits for the given value task to finish and then returns the
+  /// result. Note that this does not start the value task. Make sure
+  /// that the value task is started correctly. A `ValueTask` may be consumed only
+  /// once, so the resulting job must not be executed more than once. Exceptions thrown during
+  /// initialization may not be caught. Prefer `fromValueTask` or `liftValueTask`.
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  val inline awaitValueTask:     ValueTask<'x> -> Job<'x>
+
+  /// Creates a job that waits until the given value task finishes. Note that this
+  /// does not start the value task. Make sure that the value task is started correctly.
+  /// A `ValueTask` may be consumed only once, so the resulting job must not be
+  /// executed more than once. Exceptions thrown during initialization may not be caught. Prefer
+  /// `fromUnitValueTask` or `liftUnitValueTask`.
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  val inline awaitUnitValueTask: ValueTask     -> Job<unit>
 
   /// `bindTask x2yJ xT` is equivalent to `awaitTask xT >>= x2yJ`.
   /// Exceptions thrown during task initialization may not be caught. Prefer
@@ -829,6 +867,21 @@ module Job =
   /// `fromUnitTask` or `liftUnitTask` to convert the task to a `Job` and
   /// use `Job.bind`.
   val inline bindUnitTask: (unit -> #Job<'y>) -> Task     -> Job<'y>
+  
+  
+  /// `bindValueTask x2yJ xT` is equivalent to `awaitValueTask xT >>= x2yJ`.
+  /// A `ValueTask` may be consumed only once. Exceptions thrown during initialization may not be caught. Prefer
+  /// `fromValueTask` or `liftValueTask` to convert the value task to a `Job` and use
+  /// `Job.bind`.
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  val inline bindValueTask:     ('x   -> #Job<'y>) -> ValueTask<'x> -> Job<'y>
+
+  /// `bindUnitValueTask u2xJ uT` is equivalent to `awaitUnitValueTask uT >>= u2xJ`.
+  /// A `ValueTask` may be consumed only once. Exceptions thrown during initialization may not be caught. Prefer
+  /// `fromUnitValueTask` or `liftUnitValueTask` to convert the value task to a `Job` and
+  /// use `Job.bind`.
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  val inline bindUnitValueTask: (unit -> #Job<'y>) -> ValueTask     -> Job<'y>
 
   //# Debugging
 
@@ -972,6 +1025,9 @@ module Job =
 /// the arguments, negative acknowledgment token and a channel to the server and
 /// then synchronize using a `take` operation on the channel for the reply.  See
 /// `withNackJob` for an illustrative toy example.
+///
+/// Static members on `Alt<_>` exist so FSharpPlus can use `empty`, `<|>`, and
+/// `monad.plus { }`. They are not replacements for `Alt.always` / `Alt.never`.
 type Alt<'x> =
   /// `Alt<'x>` is a subtype of `Job<'x>`.  You can use an alternative in any
   /// context that requires a job.
@@ -1340,6 +1396,22 @@ module Alt =
   /// alternative is committed to in a choice before the task completes, then
   /// the token will be cancelled.  See also: `Job.fromUnitTask`.
   val inline fromUnitTask: (CancellationToken -> Task)     -> Alt<unit>
+  
+  /// Creates an alternative that, when instantiated, calls the given function
+  /// with a cancellation token to start a cancellable value task and waits for it to
+  /// complete, after which the alternative becomes available. If some other
+  /// alternative is committed to in a choice before the task completes, then
+  /// the token will be cancelled.  See also: `Job.fromValueTask`.
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  val inline fromValueTask:     (CancellationToken -> ValueTask<'x>) -> Alt<'x>
+
+  /// Creates an alternative that, when instantiated, calls the given function
+  /// with a cancellation token to start a cancellable value task and waits for it to
+  /// complete, after which the alternative becomes available.  If some other
+  /// alternative is committed to in a choice before the task completes, then
+  /// the token will be cancelled.  See also: `Job.fromUnitValueTask`.
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  val inline fromUnitValueTask: (CancellationToken -> ValueTask)     -> Alt<unit>
 
   //# Debugging
 
@@ -2807,8 +2879,8 @@ module Proc =
 /// In the above, an ellipsis denotes either a job, an ordinary expression or a
 /// pattern.  A job workflow can also directly bind and return from async
 /// operations, which will be started on a Hopac worker thread (see
-/// `Job.fromAsync`), tasks (see `Job.awaitTask`) and observables (see
-/// `IObservable<'x>.onceAlt`).
+/// `Job.fromAsync`), tasks (see `Job.awaitTask`), value tasks (see
+/// `Job.awaitValueTask`) and observables (see `IObservable<'x>.onceAlt`).
 ///
 /// Note that the `Job` module provides more combinators for constructing jobs.
 /// For example, the F# workflow notation does not support `Job.tryFinallyJob`
@@ -2827,6 +2899,8 @@ type JobBuilder =
   ///
   member inline Bind:        Task<'x> * ('x -> Job<'y>) -> Job<'y>
   ///
+  member inline Bind:   ValueTask<'x> * ('x -> Job<'y>) -> Job<'y>
+  ///
   member inline Bind:         Job<'x> * ('x -> Job<'y>) -> Job<'y>
   ///
   member inline Combine: Job<unit> * (unit -> Job<'x>) -> Job<'x>
@@ -2842,6 +2916,8 @@ type JobBuilder =
   member inline ReturnFrom:       Async<'x> -> Job<'x>
   ///
   member inline ReturnFrom:        Task<'x> -> Job<'x>
+  ///
+  member inline ReturnFrom:   ValueTask<'x> -> Job<'x>
   ///
   member inline ReturnFrom:         Job<'x> -> Job<'x>
   ///

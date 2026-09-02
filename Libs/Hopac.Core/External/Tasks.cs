@@ -94,6 +94,124 @@ namespace Hopac.Core {
         uT.ConfigureAwait(false).GetAwaiter().UnsafeOnCompleted(new State(wr.Scheduler, this, yK).Ready);
     }
   }
+  
+  ///
+  public abstract class BindValueTask<X, Y> : Job<Y> {
+    private ValueTask<X> xT;
+    ///
+    [MethodImpl(AggressiveInlining.Flag)]
+    public Job<Y> InternalInit(ValueTask<X> xT) { this.xT = xT; return this; }
+    ///
+    public abstract Job<Y> Do(X x);
+    private sealed class State : Work {
+      private Scheduler sr;
+      private BindValueTask<X, Y> yJ;
+      private Cont<Y> yK;
+      private ConfiguredValueTaskAwaitable<X>.ConfiguredValueTaskAwaiter awaiter;
+      internal State(Scheduler sr, BindValueTask<X, Y> yJ, Cont<Y> yK,
+                     ConfiguredValueTaskAwaitable<X>.ConfiguredValueTaskAwaiter awaiter) {
+        this.sr = sr;
+        this.yJ = yJ;
+        this.yK = yK;
+        this.awaiter = awaiter;
+      }
+      internal override Proc GetProc(ref Worker wr) {
+        return Handler.GetProc(ref wr, ref yK);
+      }
+      internal override void DoHandle(ref Worker wr, Exception e) {
+        Handler.DoHandle(yK, ref wr, e);
+      }
+      internal override void DoWork(ref Worker wr) {
+        X x;
+        try {
+          x = awaiter.GetResult();
+        } catch (Exception e) {
+          Handler.DoHandle(yK, ref wr, e);
+          return;
+        }
+        yJ.Do(x).DoJob(ref wr, yK);
+      }
+      internal void Ready() {
+        Worker.ContinueOnThisThread(sr, this);
+      }
+      internal void Bind() {
+        awaiter.UnsafeOnCompleted(Ready);
+      }
+    }
+    internal override void DoJob(ref Worker wr, Cont<Y> yK) {
+      var awaiter = xT.ConfigureAwait(false).GetAwaiter();
+      if (awaiter.IsCompleted) {
+        X x;
+        try {
+          x = awaiter.GetResult();
+        } catch (Exception e) {
+          Handler.DoHandle(yK, ref wr, e);
+          return;
+        }
+        Job.Do(Do(x), ref wr, yK);
+      } else {
+        new State(wr.Scheduler, this, yK, awaiter).Bind();
+      }
+    }
+  }
+
+  ///
+  public abstract class BindValueTask<Y> : Job<Y> {
+    private ValueTask uT;
+    ///
+    [MethodImpl(AggressiveInlining.Flag)]
+    public Job<Y> InternalInit(ValueTask uT) { this.uT = uT; return this; }
+    ///
+    public abstract Job<Y> Do();
+    private sealed class State : Work {
+      private Scheduler sr;
+      private BindValueTask<Y> yJ;
+      private Cont<Y> yK;
+      private ConfiguredValueTaskAwaitable.ConfiguredValueTaskAwaiter awaiter;
+      internal State(Scheduler sr, BindValueTask<Y> yJ, Cont<Y> yK,
+                     ConfiguredValueTaskAwaitable.ConfiguredValueTaskAwaiter awaiter) {
+        this.sr = sr;
+        this.yJ = yJ;
+        this.yK = yK;
+        this.awaiter = awaiter;
+      }
+      internal override Proc GetProc(ref Worker wr) {
+        return Handler.GetProc(ref wr, ref yK);
+      }
+      internal override void DoHandle(ref Worker wr, Exception e) {
+        Handler.DoHandle(yK, ref wr, e);
+      }
+      internal override void DoWork(ref Worker wr) {
+        try {
+          awaiter.GetResult();
+        } catch (Exception e) {
+          Handler.DoHandle(yK, ref wr, e);
+          return;
+        }
+        yJ.Do().DoJob(ref wr, yK);
+      }
+      internal void Ready() {
+        Worker.ContinueOnThisThread(sr, this);
+      }
+      internal void Bind() {
+        awaiter.UnsafeOnCompleted(Ready);
+      }
+    }
+    internal override void DoJob(ref Worker wr, Cont<Y> yK) {
+      var awaiter = uT.ConfigureAwait(false).GetAwaiter();
+      if (awaiter.IsCompleted) {
+        try {
+          awaiter.GetResult();
+        } catch (Exception e) {
+          Handler.DoHandle(yK, ref wr, e);
+          return;
+        }
+        Job.Do(Do(), ref wr, yK);
+      } else {
+        new State(wr.Scheduler, this, yK, awaiter).Bind();
+      }
+    }
+  }
 
   internal sealed class TaskToJobAwaiter<X> : Work {
     private Task<X> xT;
@@ -135,6 +253,81 @@ namespace Hopac.Core {
         xT.ConfigureAwait(false).GetAwaiter().UnsafeOnCompleted(new TaskToJobAwaiter<X>(xT, xK, wr.Scheduler).Ready);
     }
   }
+  
+  internal sealed class ValueTaskToJobAwaiter<X> : Work {
+    private ConfiguredValueTaskAwaitable<X>.ConfiguredValueTaskAwaiter awaiter;
+    private Cont<X> xK;
+    private Scheduler sr;
+    [MethodImpl(AggressiveInlining.Flag)]
+    public ValueTaskToJobAwaiter(ConfiguredValueTaskAwaitable<X>.ConfiguredValueTaskAwaiter awaiter, Cont<X> xK, Scheduler sr) {
+      this.awaiter = awaiter;
+      this.xK = xK;
+      this.sr = sr;
+    }
+    internal override Proc GetProc(ref Worker wr) {
+      return xK.GetProc(ref wr);
+    }
+    internal override void DoHandle(ref Worker wr, Exception e) {
+      xK.DoHandle(ref wr, e);
+    }
+    internal override void DoWork(ref Worker wr) {
+      X x;
+      try {
+        x = awaiter.GetResult();
+      } catch (Exception e) {
+        xK.DoHandle(ref wr, e);
+        return;
+      }
+      xK.DoCont(ref wr, x);
+    }
+    public void Ready() {
+      Worker.ContinueOnThisThread(this.sr, this);
+    }
+    public void Bind() {
+      awaiter.UnsafeOnCompleted(Ready);
+    }
+  }
+
+  ///
+  public abstract class ValueTaskToJob<X> : Job<X> {
+    ///
+    public abstract ValueTask<X> Start();
+    internal override void DoJob(ref Worker wr, Cont<X> xK) {
+      var awaiter = this.Start().ConfigureAwait(false).GetAwaiter();
+      if (awaiter.IsCompleted) {
+        X x;
+        try {
+          x = awaiter.GetResult();
+        } catch (Exception e) {
+          xK.DoHandle(ref wr, e);
+          return;
+        }
+        Cont.Do(xK, ref wr, x);
+      } else {
+        new ValueTaskToJobAwaiter<X>(awaiter, xK, wr.Scheduler).Bind();
+      }
+    }
+  }
+
+  ///
+  public abstract class ValueTaskToJob : Job<Unit> {
+    ///
+    public abstract ValueTask Start();
+    internal override void DoJob(ref Worker wr, Cont<Unit> uK) {
+      var awaiter = this.Start().ConfigureAwait(false).GetAwaiter();
+      if (awaiter.IsCompleted) {
+        try {
+          awaiter.GetResult();
+        } catch (Exception e) {
+          uK.DoHandle(ref wr, e);
+          return;
+        }
+        Work.Do(uK, ref wr);
+      } else {
+        new ValueTaskToJobAwaiter(awaiter, uK, wr.Scheduler).Bind();
+      }
+    }
+  }
 
   internal sealed class TaskToJobAwaiter : Work {
     private Task uT;
@@ -163,6 +356,39 @@ namespace Hopac.Core {
     }
     internal void Ready() {
       Worker.ContinueOnThisThread(this.sr, this);
+    }
+  }
+  
+  internal sealed class ValueTaskToJobAwaiter : Work {
+    private ConfiguredValueTaskAwaitable.ConfiguredValueTaskAwaiter awaiter;
+    private Cont<Unit> uK;
+    private Scheduler sr;
+    [MethodImpl(AggressiveInlining.Flag)]
+    public ValueTaskToJobAwaiter(ConfiguredValueTaskAwaitable.ConfiguredValueTaskAwaiter awaiter, Cont<Unit> uK, Scheduler sr) {
+      this.awaiter = awaiter;
+      this.uK = uK;
+      this.sr = sr;
+    }
+    internal override Proc GetProc(ref Worker wr) {
+      return uK.GetProc(ref wr);
+    }
+    internal override void DoHandle(ref Worker wr, Exception e) {
+      uK.DoHandle(ref wr, e);
+    }
+    internal override void DoWork(ref Worker wr) {
+      try {
+        awaiter.GetResult();
+      } catch (Exception e) {
+        uK.DoHandle(ref wr, e);
+        return;
+      }
+      uK.DoWork(ref wr);
+    }
+    internal void Ready() {
+      Worker.ContinueOnThisThread(this.sr, this);
+    }
+    internal void Bind() {
+      awaiter.UnsafeOnCompleted(Ready);
     }
   }
 
@@ -359,6 +585,235 @@ namespace Hopac.Core {
           var j = i + 1;
           nk.I1 = j;
           uT.ConfigureAwait(false).GetAwaiter().UnsafeOnCompleted(state.Ready);
+          uE.TryElse(ref wr, j);
+        }
+      }
+    }
+  }
+  
+  internal sealed class ValueTaskToAltAwaiter<X> : Cont<Unit> {
+    private CancellationTokenSource cts;
+    private Pick pk;
+    private int me;
+    private ConfiguredValueTaskAwaitable<X>.ConfiguredValueTaskAwaiter awaiter;
+    private Cont<X> xK;
+    private Scheduler sr;
+    [MethodImpl(AggressiveInlining.Flag)]
+    public ValueTaskToAltAwaiter(CancellationTokenSource cts, Pick pk, int me,
+                                 ConfiguredValueTaskAwaitable<X>.ConfiguredValueTaskAwaiter awaiter,
+                                 Cont<X> xK, Scheduler sr) {
+      this.cts = cts;
+      this.pk = pk;
+      this.me = me;
+      this.awaiter = awaiter;
+      this.xK = xK;
+      this.sr = sr;
+    }
+    internal override Proc GetProc(ref Worker wr) {
+      return xK.GetProc(ref wr);
+    }
+    internal override void DoHandle(ref Worker wr, Exception e) {
+      xK.DoHandle(ref wr, e);
+    }
+    internal override void DoWork(ref Worker wr) {
+      var pk = this.pk;
+      var cts = this.cts;
+      if (null == cts)
+        goto Done;
+      this.cts = null;
+      var picked = Pick.PickAndSetNacks(pk, ref wr, this.me);
+      if (0 != picked)
+        cts.Cancel();
+      cts.Dispose();
+      if (0 != picked)
+        goto Done;
+      X x;
+      try {
+        x = awaiter.GetResult();
+      } catch (Exception e) {
+        xK.DoHandle(ref wr, e);
+        goto Done;
+      }
+      xK.DoCont(ref wr, x);
+    Done:
+      return;
+    }
+    internal override void DoCont(ref Worker wr, Unit value) {
+      this.DoWork(ref wr);
+    }
+    public void Ready() {
+      Worker.ContinueOnThisThread(this.sr, this);
+    }
+    public void Bind() {
+      awaiter.UnsafeOnCompleted(Ready);
+    }
+  }
+
+  ///
+  public abstract class ValueTaskToAlt<X> : Alt<X> {
+    ///
+    public abstract ValueTask<X> Start(CancellationToken t);
+    internal override void DoJob(ref Worker wr, Cont<X> xK) {
+      var awaiter = Start(new CancellationToken(false)).ConfigureAwait(false).GetAwaiter();
+      if (awaiter.IsCompleted) {
+        X x;
+        try {
+          x = awaiter.GetResult();
+        } catch (Exception e) {
+          xK.DoHandle(ref wr, e);
+          return;
+        }
+        Cont.Do(xK, ref wr, x);
+      } else {
+        new ValueTaskToJobAwaiter<X>(awaiter, xK, wr.Scheduler).Bind();
+      }
+    }
+    internal override void TryAlt(ref Worker wr, int i, Cont<X> xK, Else xE) {
+      var pk = xE.pk;
+      var nk = Pick.ClaimAndAddNack(pk, i);
+      if (null != nk) {
+        var cts = new CancellationTokenSource();
+        ValueTask<X> xT;
+        try {
+          xT = Start(cts.Token);
+        } catch (Exception e) {
+          Pick.PickClaimedAndSetNacks(ref wr, i, pk);
+          cts.Dispose();
+          Handler.DoHandle(xK, ref wr, e);
+          return;
+        }
+        var awaiter = xT.ConfigureAwait(false).GetAwaiter();
+        if (awaiter.IsCompleted) {
+          Pick.PickClaimedAndSetNacks(ref wr, i, pk);
+          cts.Dispose();
+          X x;
+          try {
+            x = awaiter.GetResult();
+          } catch (Exception e) {
+            Handler.DoHandle(xK, ref wr, e);
+            return;
+          }
+          Cont.Do(xK, ref wr, x);
+        } else {
+          var state = new ValueTaskToAltAwaiter<X>(cts, pk, i, awaiter, xK, wr.Scheduler);
+          nk.UnsafeAddReader(state);
+          Pick.Unclaim(pk);
+          var j = i + 1;
+          nk.I1 = j;
+          state.Bind();
+          xE.TryElse(ref wr, j);
+        }
+      }
+    }
+  }
+
+  internal sealed class ValueTaskToAltAwaiter : Cont<Unit> {
+    private CancellationTokenSource cts;
+    private Pick pk;
+    private int me;
+    private ConfiguredValueTaskAwaitable.ConfiguredValueTaskAwaiter awaiter;
+    private Cont<Unit> uK;
+    private Scheduler sr;
+    [MethodImpl(AggressiveInlining.Flag)]
+    public ValueTaskToAltAwaiter(CancellationTokenSource cts, Pick pk, int me,
+                                 ConfiguredValueTaskAwaitable.ConfiguredValueTaskAwaiter awaiter,
+                                 Cont<Unit> uK, Scheduler sr) {
+      this.cts = cts;
+      this.pk = pk;
+      this.me = me;
+      this.awaiter = awaiter;
+      this.uK = uK;
+      this.sr = sr;
+    }
+    internal override Proc GetProc(ref Worker wr) {
+      return uK.GetProc(ref wr);
+    }
+    internal override void DoHandle(ref Worker wr, Exception e) {
+      uK.DoHandle(ref wr, e);
+    }
+    internal override void DoWork(ref Worker wr) {
+      var pk = this.pk;
+      var cts = this.cts;
+      if (null == cts)
+        goto Done;
+      this.cts = null;
+      var picked = Pick.PickAndSetNacks(pk, ref wr, this.me);
+      if (0 != picked)
+        cts.Cancel();
+      cts.Dispose();
+      if (0 != picked)
+        goto Done;
+      try {
+        awaiter.GetResult();
+      } catch (Exception e) {
+        uK.DoHandle(ref wr, e);
+        goto Done;
+      }
+      uK.DoWork(ref wr);
+    Done:
+      return;
+    }
+    internal override void DoCont(ref Worker wr, Unit value) {
+      this.DoWork(ref wr);
+    }
+    public void Ready() {
+      Worker.ContinueOnThisThread(this.sr, this);
+    }
+    public void Bind() {
+      awaiter.UnsafeOnCompleted(Ready);
+    }
+  }
+
+  ///
+  public abstract class ValueTaskToAlt : Alt<Unit> {
+    ///
+    public abstract ValueTask Start(CancellationToken t);
+    internal override void DoJob(ref Worker wr, Cont<Unit> uK) {
+      var awaiter = Start(new CancellationToken(false)).ConfigureAwait(false).GetAwaiter();
+      if (awaiter.IsCompleted) {
+        try {
+          awaiter.GetResult();
+        } catch (Exception e) {
+          uK.DoHandle(ref wr, e);
+          return;
+        }
+        Work.Do(uK, ref wr);
+      } else {
+        new ValueTaskToJobAwaiter(awaiter, uK, wr.Scheduler).Bind();
+      }
+    }
+    internal override void TryAlt(ref Worker wr, int i, Cont<Unit> uK, Else uE) {
+      var pk = uE.pk;
+      var nk = Pick.ClaimAndAddNack(pk, i);
+      if (null != nk) {
+        var cts = new CancellationTokenSource();
+        ValueTask uT;
+        try {
+          uT = Start(cts.Token);
+        } catch (Exception e) {
+          Pick.PickClaimedAndSetNacks(ref wr, i, pk);
+          cts.Dispose();
+          Handler.DoHandle(uK, ref wr, e);
+          return;
+        }
+        var awaiter = uT.ConfigureAwait(false).GetAwaiter();
+        if (awaiter.IsCompleted) {
+          Pick.PickClaimedAndSetNacks(ref wr, i, pk);
+          cts.Dispose();
+          try {
+            awaiter.GetResult();
+          } catch (Exception e) {
+            Handler.DoHandle(uK, ref wr, e);
+            return;
+          }
+          Work.Do(uK, ref wr);
+        } else {
+          var state = new ValueTaskToAltAwaiter(cts, pk, i, awaiter, uK, wr.Scheduler);
+          nk.UnsafeAddReader(state);
+          Pick.Unclaim(pk);
+          var j = i + 1;
+          nk.I1 = j;
+          state.Bind();
           uE.TryElse(ref wr, j);
         }
       }

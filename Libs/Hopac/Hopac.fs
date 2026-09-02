@@ -4,12 +4,10 @@ namespace Hopac
 
 open System
 open System.Collections.Generic
-open System.Diagnostics
 open System.Runtime.CompilerServices
 open System.Threading
 open System.Threading.Tasks
 open Hopac.Core
-open Hopac.Core.Abstractions
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -57,6 +55,28 @@ module MoreUtil =
      let yK = xK'.yK
      wr.Handler <- yK
      (xK'.x2yJ x).DoJob (&wr, yK)
+
+  type TryFinallyFunCont<'x> =
+    inherit Cont<'x>
+    val u2u: unit -> unit
+    val mutable xK: Cont<'x>
+    new (u2u, xK) = {inherit Cont<'x> (); u2u=u2u; xK=xK}
+    override xK'.GetProc (wr) = Handler.GetProc (&wr, &xK'.xK)
+    override xK'.DoHandle (wr, e) =
+      let xK = xK'.xK
+      wr.Handler <- xK
+      xK'.u2u ()
+      Handler.DoHandle (xK, &wr, e)
+    override xK'.DoWork (wr) =
+      let xK = xK'.xK
+      wr.Handler <- xK
+      xK'.u2u ()
+      xK.DoCont (&wr, xK'.Value)
+    override xK'.DoCont (wr, x) =
+      let xK = xK'.xK
+      wr.Handler <- xK
+      xK'.u2u ()
+      xK.DoCont (&wr, x)
 
   type DropCont<'x, 'y> =
     inherit Cont<'y>
@@ -153,14 +173,23 @@ module IVar =
 
 module Infixes =
   let inline (>>=) (xJ: Job<'x>) (x2yJ: 'x -> #Job<'y>) =
-    JobBind<_, _, _>(x2yJ).InternalInit(xJ)
+    {new JobCont<'x, 'y> () with
+      override yJ'.Do () =
+        upcast {new ContBind<'x, 'y> () with
+          override xK'.Do (x) =
+            upcast x2yJ x}}.InternalInit(xJ)
 
   let (>>=.) (xJ: Job<_>) (yJ: Job<'y>) =
     {new Job<'y> () with
       override yJ'.DoJob (wr, yK) =
        xJ.DoJob (&wr, SeqCont (yJ, yK))}
 
-  let inline (>>-) (xJ: Job<'x>) (x2y: 'x -> 'y) = JobMap<_, _>(x2y).InternalInit(xJ)
+  let inline (>>-) (xJ: Job<'x>) (x2y: 'x -> 'y) =
+    {new JobCont<'x, 'y> () with
+      override yJ'.Do () =
+        upcast {new ContMap<'x, 'y> () with
+          override xK'.Do (x) =
+            x2y x}}.InternalInit(xJ)
 
   let (>>-.) (xJ: Job<_>) (y: 'y) =
     {new Job<'y> () with
@@ -185,8 +214,25 @@ module Infixes =
   let inline (>=>.) x2yJ zJ x = x2yJ x >>=. zJ
   let inline (>->.) x2yJ z x = x2yJ x >>-. z
 
+  type PairCont2<'x, 'y> (x: 'x, xyK: Cont<'x * 'y>) =
+    inherit Cont<'y> ()
+    override yK'.GetProc (wr) = xyK.GetProc (&wr)
+    override yK'.DoHandle (wr, e) = xyK.DoHandle (&wr, e)
+    override yK'.DoWork (wr) = xyK.DoCont (&wr, (x, yK'.Value))
+    override yK'.DoCont (wr, y) = xyK.DoCont (&wr, (x, y))
+
+  type PairCont<'x, 'y> (yJ: Job<'y>, xyK: Cont<'x * 'y>) =
+    inherit Cont<'x> ()
+    override xK'.GetProc (wr) = xyK.GetProc (&wr)
+    override xK'.DoHandle (wr, e) = xyK.DoHandle (&wr, e)
+    override xK'.DoWork (wr) =
+      yJ.DoJob (&wr, PairCont2<'x, 'y> (xK'.Value, xyK))
+    override xK'.DoCont (wr, x) = yJ.DoJob (&wr, PairCont2<'x, 'y> (x, xyK))
+
   let (<&>) (xJ: Job<'x>) (yJ: Job<'y>) =
-    JobZip<_, _>(xJ, yJ) :> Job<_>
+    {new Job<'x * 'y> () with
+      override xyJ'.DoJob (wr, xyK) =
+       xJ.DoJob (&wr, PairCont (yJ, xyK))}
 
   let (<*>) (xJ: Job<'x>) (yJ: Job<'y>) =
     {new Job<'x * 'y> () with
@@ -224,7 +270,10 @@ module Infixes =
      override xE'.TryElse (wr, i) =
       xA2.TryAlt (&wr, i, xK, xE)}.Init(xE.pk))
 
-  let (<|>) (xA1: Alt<'x>) (xA2: Alt<'x>) = Alt_Alternative<_>(xA1, xA2) :> Alt<_>
+  let (<|>) (xA1: Alt<'x>) (xA2: Alt<'x>) =
+    {new Alt<'x> () with
+      override xA'.DoJob (wr, xK) = either &wr xK xA1 xA2
+      override xA'.TryAlt (wr, i, xK, xE) = eitherOr &wr i xK xE xA1 xA2}
 
   let (<~>) (xA1: Alt<'x>) (xA2: Alt<'x>) =
     {new Alt<'x> () with
@@ -237,7 +286,11 @@ module Infixes =
        then eitherOr &wr i xK xE xA1 xA2
        else eitherOr &wr i xK xE xA2 xA1}
 
-  let inline (^->) (xA: Alt<'x>) (x2y: 'x -> 'y) = AltAfterFun<_, _>(x2y).InternalInit(xA)
+  let inline (^->) (xA: Alt<'x>) (x2y: 'x -> 'y) =
+    {new AltAfter<'x, 'y> () with
+      override yA'.Do () =
+        upcast {new ContMap<'x, 'y> () with
+          override xK'.Do (x) = x2y x}}.InternalInit(xA)
 
   let inline (^=>) (xA: Alt<'x>) (x2yJ: 'x -> #Job<'y>) =
     {new AltAfter<'x, 'y> () with
@@ -765,6 +818,16 @@ module Alt =
   let inline fromUnitTask (t2uT: CancellationToken -> Task) =
     {new TaskToAlt () with
       override xA'.Start t = t2uT t} :> Alt<_>
+  
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]  
+  let inline fromValueTask (t2xT: CancellationToken -> ValueTask<'x>) =
+    {new ValueTaskToAlt<_> () with
+      override xA'.Start t = t2xT t} :> Alt<_>
+    
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  let inline fromUnitValueTask (t2uT: CancellationToken -> ValueTask) =
+    {new ValueTaskToAlt () with
+      override xA'.Start t = t2uT t} :> Alt<_>
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -838,7 +901,10 @@ module Job =
 
   //////////////////////////////////////////////////////////////////////////////
 
-  let inline delay (u2xJ: unit -> #Job<'x>) = JobDelayImpl<_, _>(u2xJ) :> Job<_>
+  let inline delay (u2xJ: unit -> #Job<'x>) =
+    {new JobDelay<'x> () with
+      override xJ'.Do () =
+       upcast u2xJ ()} :> Job<_>
 
   let inline delayWith (x2yJ: 'x -> #Job<'y>) (x: 'x) =
     {new JobDelay<'y> () with
@@ -950,8 +1016,21 @@ module Job =
 
   let inline map (x2y: 'x -> 'y) (xJ: Job<'x>) = xJ >>- x2y
 
+  let inline applyMap (wr: byref<_>) x2y (xJ: Job<_>) (yK: Cont<_>) =
+    xJ.DoJob (&wr, {new Cont<_> () with
+      override xK'.GetProc (wr) = yK.GetProc (&wr)
+      override xK'.DoHandle (wr, e) = yK.DoHandle (&wr, e)
+      override xK'.DoWork (wr) = Cont.Do (yK, &wr, x2y xK'.Value)
+      override xK'.DoCont (wr, x) = Cont.Do (yK, &wr, x2y x)})
+
   let apply (xJ: Job<'x>) (x2yJ: Job<'x -> 'y>) =
-    JobApply<_, _>(xJ, x2yJ) :> Job<_>
+    {new Job<_> () with
+      override yJ'.DoJob (wr, yK) =
+        x2yJ.DoJob (&wr, {new Cont<_> () with
+          override x2yK'.GetProc (wr) = yK.GetProc (&wr)
+          override x2yK'.DoHandle (wr, e) = yK.DoHandle (&wr, e)
+          override x2yK'.DoWork (wr) = applyMap &wr x2yK'.Value xJ yK
+          override x2yK'.DoCont (wr, x2y) = applyMap &wr x2y xJ yK})}
 
   let inline unit () = Alt.unit () :> Job<_>
 
@@ -1001,7 +1080,10 @@ module Job =
        override xK'.DoExn (e) = upcast e2xJ e}}.InternalInit(xJ)
 
   let inline tryWithDelay (u2xJ: unit -> #Job<'x>) (e2xJ: exn -> #Job<'x>) =
-    JobTryWithDelayImpl<_, _, _>(u2xJ, e2xJ) :> Job<_>
+    {new JobTryWithDelay<'x> () with
+      override xJ'.Do () = upcast u2xJ ()
+      override xJ'.DoCont() = {new ContTryWith<'x> () with
+       override xK'.DoExn (e) = upcast e2xJ e}} :> Job<_>
 
   let tryFinallyFun (xJ: Job<'x>) (u2u: unit -> unit) =
     {new Job<'x> () with
@@ -1011,7 +1093,11 @@ module Job =
        xJ.DoJob (&wr, xK')}
 
   let tryFinallyFunDelay (u2xJ: unit -> #Job<'x>) (u2u: unit -> unit) =
-    JobTryFinally<_, _>(u2xJ, u2u) :> Job<_>
+    {new Job<'x> () with
+      override xJ'.DoJob (wr, xK_) =
+       let xK' = TryFinallyFunCont (u2u, xK_)
+       wr.Handler <- xK'
+       u2xJ().DoJob (&wr, xK')}
 
   let tryFinallyJob (xJ: Job<'x>) (uJ: Job<unit>) =
     {new Job<'x> () with
@@ -1393,18 +1479,47 @@ module Job =
   let inline fromUnitTask (u2uT: unit -> Task) =
     {new TaskToJob () with
       override xJ'.Start () = u2uT ()} :> Job<unit>
+    
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  let inline fromValueTask (u2xT: unit -> ValueTask<'x>) =
+    {new ValueTaskToJob<_> () with
+      override xJ'.Start () = u2xT ()} :> Job<'x>
+    
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  let inline fromUnitValueTask (u2uT: unit -> ValueTask) =
+    {new ValueTaskToJob () with
+      override xJ'.Start () = u2uT ()} :> Job<unit>
 
   let inline liftTask x2yT x = fromTask ^ fun () -> x2yT x
   let inline liftUnitTask x2uT x = fromUnitTask ^ fun () -> x2uT x
+  
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  let inline liftValueTask x2yT x = fromValueTask ^ fun () -> x2yT x
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  let inline liftUnitValueTask x2uT x = fromUnitValueTask ^ fun () -> x2uT x
 
   let inline awaitTask (xT: Task<'x>) = fromTask ^ fun () -> xT
   let inline awaitUnitTask (uT: Task) = fromUnitTask ^ fun () -> uT
+  
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  let inline awaitValueTask (xT: ValueTask<'x>) = fromValueTask ^ fun () -> xT
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  let inline awaitUnitValueTask (uT: ValueTask) = fromUnitValueTask ^ fun () -> uT
 
   let inline bindTask (x2yJ: 'x -> #Job<'y>) (xT: Task<'x>) =
     {new BindTask<'x, 'y> () with
       override yJ'.Do (x) = upcast x2yJ x}.InternalInit(xT)
   let inline bindUnitTask (u2xJ: unit -> #Job<'x>) (uT: Task) =
     {new BindTask<'x> () with
+      override xJ'.Do () = upcast u2xJ ()}.InternalInit(uT)
+  
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  let inline bindValueTask (x2yJ: 'x -> #Job<'y>) (xT: ValueTask<'x>) =
+    {new BindValueTask<'x, 'y> () with
+      override yJ'.Do (x) = upcast x2yJ x}.InternalInit(xT)
+  [<Experimental("This API is experimental. Its performance is not tested yet.")>]
+  let inline bindUnitValueTask (u2xJ: unit -> #Job<'x>) (uT: ValueTask) =
+    {new BindValueTask<'x> () with
       override xJ'.Do () = upcast u2xJ ()}.InternalInit(uT)
 
   //////////////////////////////////////////////////////////////////////////////
@@ -2103,6 +2218,8 @@ type JobBuilder () =
     Job.bindAsync x2yJ xA
   member inline __.Bind (xT: Task<'x>, x2yJ: 'x -> Job<'y>) =
     Job.bindTask x2yJ xT
+  member inline __.Bind (xT: ValueTask<'x>, x2yJ: 'x -> Job<'y>) =
+    Job.bindValueTask x2yJ xT
   member inline __.Bind (xJ: Job<'x>, x2yJ: 'x -> Job<'y>) = xJ >>= x2yJ
   member inline __.Combine (uJ: Job<unit>, u2xJ: unit -> Job<'x>) = uJ >>= u2xJ
   member inline __.Delay (u2xJ: unit -> Job<'x>) = u2xJ
@@ -2112,6 +2229,7 @@ type JobBuilder () =
   member inline __.ReturnFrom (xO: IObservable<'x>) = xO.onceAlt :> Job<_>
   member inline __.ReturnFrom (xA: Async<'x>) = Job.fromAsync xA
   member inline __.ReturnFrom (xT: Task<'x>) = Job.awaitTask xT
+  member inline __.ReturnFrom (xT: ValueTask<'x>) = Job.awaitValueTask xT
   member inline __.ReturnFrom (xJ: Job<'x>) = xJ
   member inline __.Run (u2xJ: unit -> Job<'x>) = Job.delay u2xJ
   member inline __.TryFinally (u2xJ: unit -> Job<'x>, u2u: unit -> unit) =

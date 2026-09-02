@@ -4,7 +4,6 @@
     <RootNamespace>Hopac</RootNamespace>
     <AssemblyName>Hopac.Core</AssemblyName>
     <DefaultLanguage>en-US</DefaultLanguage>
-    <TargetFramework>netstandard2.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <SignAssembly Condition="'$(StrongNameAssembly)' == 'true'">true</SignAssembly>
     <AssemblyOriginatorKeyFile Condition="'$(StrongNameAssembly)' == 'true'">../../Hopac.snk</AssemblyOriginatorKeyFile>
@@ -13,6 +12,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ResolveNuGetPackages>false</ResolveNuGetPackages>
     <Optimize>true</Optimize>
+    <TargetFramework>netstandard2.1</TargetFramework>
   </PropertyGroup>
   
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -21,10 +21,6 @@
   
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
     <DefineConstants>TRACE;AGGRESSIVE_INLINING;TRAMPOLINE</DefineConstants>
-  </PropertyGroup>
-  
-  <PropertyGroup Condition=" '$(TargetFramework)' == 'netstandard2.0' ">
-    <DefineConstants>$(DefineConstants);NO_ISTHREADPOOLTHREAD</DefineConstants>
   </PropertyGroup>
   
   <ItemGroup>
