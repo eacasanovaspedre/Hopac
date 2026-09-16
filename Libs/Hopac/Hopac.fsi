@@ -490,6 +490,54 @@ module Job =
 #endif
   val usingAsync: 'x -> ('x -> #Job<'y>) -> Job<'y> when 'x :> IAsyncDisposable
 
+  /// Like `usingAsync`, but the resource is produced by a job.
+  /// `usingAsyncJob xJ x2yJ` is equivalent to `bind (fun x -> usingAsync x
+  /// x2yJ) xJ`.  If `xJ` fails, the body is not run and nothing is disposed.
+  /// See also: `usingAsync`, `usingAsyncJob'`.
+  val inline usingAsyncJob: Job<'x> -> ('x -> #Job<'y>) -> Job<'y>
+                            when 'x :> IAsyncDisposable
+
+  /// Implements a `use` like construct for `System.IAsyncDisposable`
+  /// resources.  After the body job completes or fails, `DisposeAsync` is
+  /// invoked via `Job.fromUnitValueTask` and awaited.  Unlike `usingAsync`,
+  /// this takes `System.IAsyncDisposable` (`unit -> ValueTask`) rather than
+  /// Hopac's `IAsyncDisposable` (`unit -> Job<unit>`).  Disposal always
+  /// runs; a failing dispose replaces the body exception, matching
+  /// `tryFinallyJob`.  See also: `abort`, `using`, `usingAsync`,
+  /// `usingAsync2'`.
+  val inline usingAsync': 'x -> ('x -> #Job<'y>) -> Job<'y>
+                          when 'x :> System.IAsyncDisposable
+
+  /// Like `usingAsync'`, but the resource is produced by a job.
+  /// `usingAsyncJob' xJ x2yJ` is equivalent to `bind (fun x -> usingAsync' x
+  /// x2yJ) xJ`.  If `xJ` fails, the body is not run and nothing is disposed.
+  /// See also: `usingAsync'`, `usingAsyncJob2'`.
+  val inline usingAsyncJob': Job<'x> -> ('x -> #Job<'y>) -> Job<'y>
+                             when 'x :> System.IAsyncDisposable
+
+  /// Like nested `usingAsync'` over two `System.IAsyncDisposable` resources.
+  /// The second resource is built from the first, so it can depend on it.
+  /// Equivalent to `usingAsync' resource1 (fun r1 -> usingAsync' (x12x2 r1)
+  /// (fun r2 -> xs2yJ (r1, r2)))`.  Disposal is reverse-order and sequential:
+  /// the second resource is disposed to completion before the first starts
+  /// disposing.  See also: `usingAsync'`.
+  val inline usingAsync2': (unit -> 'x1) -> ('x1 -> 'x2)
+                        -> ('x1 -> 'x2 -> #Job<'y>) -> Job<'y>
+                           when 'x1 :> System.IAsyncDisposable
+                           and  'x2 :> System.IAsyncDisposable
+
+  /// Like nested `usingAsyncJob'` over two jobs that produce
+  /// `System.IAsyncDisposable` resources.  The second job is built from the
+  /// first resource, so it can depend on it.  Equivalent to `usingAsyncJob'
+  /// x1J (fun r1 -> usingAsyncJob' (x12x2J r1) (fun r2 -> xs2yJ (r1, r2)))`.
+  /// Resources are acquired in order; if the second acquire fails, the first
+  /// resource is still disposed.  Disposal is reverse-order and sequential.
+  /// See also: `usingAsync2'`, `usingAsyncJob'`.
+  val inline usingAsyncJob2': Job<'x1> -> ('x1 -> Job<'x2>)
+                           -> ('x1 -> 'x2 -> #Job<'y>) -> Job<'y>
+                              when 'x1 :> System.IAsyncDisposable
+                              and  'x2 :> System.IAsyncDisposable
+
   //# Repeating an operation
 
   /// Creates a job that runs the given job sequentially the given number of

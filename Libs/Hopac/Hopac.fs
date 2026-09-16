@@ -1113,21 +1113,6 @@ module Job =
        wr.Handler <- xK'
        u2xJ().DoJob (&wr, xK')}
 
-  let usingAsync (x: 'x when 'x :> IAsyncDisposable) (x2yJ: 'x -> #Job<'y>) =
-    {new Job<'y> () with
-      override yJ'.DoJob (wr, yK_) =
-       let yK' = TryFinallyJobCont (x.DisposeAsync (), yK_)
-       wr.Handler <- yK'
-       (x2yJ x).DoJob (&wr, yK')}
-
-  let inline using (x: 'x when 'x :> IDisposable) (x2yJ: 'x -> #Job<'y>) =
-    {new JobUsing<_, _>() with
-      override yJ'.Do x = upcast x2yJ x}.InternalInit(x)
-
-  let inline useIn (x2yJ: 'x -> #Job<'y>) (x: 'x when 'x :> IDisposable) =
-    {new JobUsing<_, _>() with
-      override yJ'.Do x = upcast x2yJ x}.InternalInit(x)
-
   let catch (xJ: Job<'x>) =
     {new Job<Choice<'x, exn>> () with
       override cJ'.DoJob (wr, cK) =
@@ -1521,6 +1506,43 @@ module Job =
   let inline bindUnitValueTask (u2xJ: unit -> #Job<'x>) (uT: ValueTask) =
     {new BindValueTask<'x> () with
       override xJ'.Do () = upcast u2xJ ()}.InternalInit(uT)
+
+  let usingAsync (x: 'x when 'x :> IAsyncDisposable) (x2yJ: 'x -> #Job<'y>) =
+      {new Job<'y> () with
+        override yJ'.DoJob (wr, yK_) =
+         let yK' = TryFinallyJobCont (x.DisposeAsync (), yK_)
+         wr.Handler <- yK'
+         (x2yJ x).DoJob (&wr, yK')}
+
+  let inline usingAsyncJob (xJ: Job<'x>) (x2yJ: 'x -> #Job<'y>) =
+    bind (fun x -> usingAsync x x2yJ) xJ
+
+  let inline usingAsync' (x: 'x when 'x :> System.IAsyncDisposable) (x2yJ: 'x -> #Job<'y>) =
+    {new Job<'y> () with
+      override yJ'.DoJob (wr, yK_) =
+        let yK' = TryFinallyJobCont (fromUnitValueTask(fun () -> x.DisposeAsync ()), yK_)
+        wr.Handler <- yK'
+        (x2yJ x).DoJob (&wr, yK')}
+
+  let inline usingAsyncJob' (xJ: Job<'x>) (x2yJ: 'x -> #Job<'y>) =
+      bind (fun x -> usingAsync' x x2yJ) xJ
+
+  let inline usingAsync2'
+    (u2x1: unit -> 'x1 when 'x1 :> System.IAsyncDisposable)
+    (x12x2: 'x1 -> 'x2 when 'x2 :> System.IAsyncDisposable)
+    (xs2yJ: 'x1 -> 'x2 -> #Job<'y>) =
+      usingAsync' (u2x1 ()) (fun x1 -> usingAsync' (x12x2 x1) (fun x2 -> xs2yJ x1 x2))
+
+  let inline usingAsyncJob2' (x1J: Job<'x1>) (x12x2J: 'x1 -> Job<'x2>) (xs2yJ: 'x1 -> 'x2 -> #Job<'y>) =
+      usingAsyncJob' x1J (fun x1 -> usingAsyncJob' (x12x2J x1) (fun x2 -> xs2yJ x1 x2))
+  
+  let inline using (x: 'x when 'x :> IDisposable) (x2yJ: 'x -> #Job<'y>) =
+    {new JobUsing<_, _>() with
+      override yJ'.Do x = upcast x2yJ x}.InternalInit(x)
+  
+  let inline useIn (x2yJ: 'x -> #Job<'y>) (x: 'x when 'x :> IDisposable) =
+    {new JobUsing<_, _>() with
+      override yJ'.Do x = upcast x2yJ x}.InternalInit(x)
 
   //////////////////////////////////////////////////////////////////////////////
 
