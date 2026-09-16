@@ -18,7 +18,7 @@ let inline tryAp x2y x yK eK =
    | e -> eK e
 let inline tryIn u2x xK eK = tryAp u2x () xK eK
 let inline withTcs tcs2u =
-  let tcs = TaskCompletionSource ()
+  let tcs = TaskCompletionSource<_> ()
   tcs2u tcs
   tcs.Task
 let inline setRes (tcs: TaskCompletionSource<_>) = tcs.SetResult

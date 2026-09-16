@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <ResolveNuGetPackages>false</ResolveNuGetPackages>
     <Tailcalls>true</Tailcalls>
@@ -24,7 +24,7 @@
     <OtherFlags>--warnon:1182</OtherFlags>
   </PropertyGroup>
   
-  <PropertyGroup Condition=" '$(Targetframework)' == 'netcoreapp3.1' ">
+  <PropertyGroup Condition=" '$(Targetframework)' == 'net8.0' ">
     <DefineConstants>CORECLR</DefineConstants>
   </PropertyGroup>
   
