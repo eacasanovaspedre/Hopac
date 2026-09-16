@@ -52,4 +52,8 @@
     <ProjectReference Include="..\..\Libs\Hopac.Core\Hopac.Core.csproj" />
   </ItemGroup>
   
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="10.1.401" />
+  </ItemGroup>
+  
 </Project>

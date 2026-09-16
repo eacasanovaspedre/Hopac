@@ -31,4 +31,7 @@
     <ProjectReference Include="..\..\Libs\Hopac.Experimental\Hopac.Experimental.fsproj" />
     <ProjectReference Include="..\..\Libs\Hopac.Bench\Hopac.Bench.fsproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="10.1.401" />
+  </ItemGroup>
 </Project>

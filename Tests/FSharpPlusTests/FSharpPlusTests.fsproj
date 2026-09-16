@@ -13,8 +13,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FSharpPlus" Version="1.6.1" />
-    <PackageReference Update="FSharp.Core" Version="8.0.100" />
+    <PackageReference Include="FSharpPlus" Version="1.9.1" />
+    <PackageReference Update="FSharp.Core" Version="10.1.401" />
   </ItemGroup>
 
   <ItemGroup>
