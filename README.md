@@ -1,12 +1,22 @@
+**HopacPlus** is a fork of the original [Hopac](https://github.com/Hopac/Hopac)
+library by Vesa Karvonen. It is published on NuGet as
+[HopacPlus](https://www.nuget.org/packages/HopacPlus).
+
+This library allows Hopac Jobs and Alts to be used as F#+ Functors and Monads, and provides a number of additional combinators and operators.
+Some small fixes have been done too and added some new operations to Jobs.
+
+[![NuGet version](https://badge.fury.io/nu/HopacPlus.svg)](https://www.nuget.org/packages/HopacPlus)
+[![GitHub Build status](https://github.com/eacasanovaspedre/Hopac/actions/workflows/nuget.yml/badge.svg?branch=master-plus)](https://github.com/eacasanovaspedre/Hopac/actions/workflows/nuget.yml)
+
+---
+# Original content from Hopac's own README.md
+
 [Reference](http://hopac.github.io/Hopac/Hopac.html) —
 [Guide](./Docs/Programming.md) —
 [Docs](./Docs/)
 
 Hopac is a [Concurrent ML](http://cml.cs.uchicago.edu/) style concurrent
 programming library for F#.
-
-[![NuGet version](https://badge.fury.io/nu/Hopac.svg)](https://badge.fury.io/nu/Hopac)
-[![AppVeyor Build status](https://ci.appveyor.com/api/projects/status/ux9rh6ouhuvu1yia?svg=true)](https://ci.appveyor.com/project/haf/hopac)
 
 ## Development
 
