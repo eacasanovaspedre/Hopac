@@ -530,39 +530,31 @@ module Stream =
       mapJob x2yJ xs
     else
       delay <| fun () ->
-      let inCh, outCh = Ch(), Ch()
-      let mutable usage = 0
-      let mutable closing = false
+      let inCh = Ch ()
+      let resultMb = Mailbox ()
+      inCh >>= fun (x, rI: IVar<_>) ->
+          Job.tryInDelay (fun () -> x2yJ x)
+            (fun y -> rI *<= Some y)
+            (fun e -> rI *<=! e)
+      |> Job.foreverServer
+      |> Job.forN degree
+      >>=. Job.tryIn
+             (xs |> iterJob ^ fun x ->
+                  let rI = IVar ()
+                  inCh *<- (x, rI) >>=.
+                  resultMb *<<+ (rI :> Job<_>))
+             (fun () -> resultMb *<<+ Job.result None)
+             (fun e -> resultMb *<<+ Job.raises e)
+      |> start
+      let rec loop () =
+        resultMb >>=* fun rJ ->
+          rJ >>- function
+           | Some y -> Cons (y, loop ())
+           | None   -> Nil
+      loop ()
 
-      let rec loop() =
-        Alt.choose [
-          outCh ^-> function
-            | Choice1Of2 y -> usage <- usage - 1
-                              Cons (y, loop ())
-            | Choice2Of2 e -> raise e
-          (if not closing && usage < degree then
-            inCh ^=> fun x ->
-              usage <- usage + 1
-              Job.tryInDelay 
-                (fun () -> x2yJ x)
-                (Choice1Of2 >> Ch.give outCh)
-                (Choice2Of2 >> Ch.give outCh)
-              |> Job.queue
-              >>= loop
-           else Alt.never())
-          (if closing && usage = 0
-           then Alt.always Nil
-           else Alt.never())
-        ] |> memo
-
-      Job.tryIn 
-        (xs |> iterJob (Ch.give inCh))
-        (fun () -> closing <- true; Job.unit() )
-        (fun e  -> outCh *<- Choice2Of2 e)
-      |> Job.start >>= loop
-
-  let mapPipelinedFun (slack: int) (x2y: 'x -> 'y) (xs: Stream<'x>) =
-    mapPipelinedJob slack (Job.lift x2y) xs
+  let mapPipelinedFun (degree: int) (x2y: 'x -> 'y) (xs: Stream<'x>) =
+    mapPipelinedJob degree (Job.lift x2y) xs
 
   let toSeq xs = Job.delay <| fun () ->
     let ys = ResizeArray ()

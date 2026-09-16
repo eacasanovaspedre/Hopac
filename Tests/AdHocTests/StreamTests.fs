@@ -43,6 +43,19 @@ let run () =
   |> run
   |> testEq [2;3;4;5;6;7;8]
 
+  let pipelined xs =
+    Stream.ofList xs
+    |> Stream.mapPipelinedJob 10 ^ fun x ->
+         timeOutMillis (Math.Abs (x % 10)) >>-. x
+    |> Stream.toList
+    |> run
+  for xs in [ []; [0]; [1]; [1;0]; [0;1]; [0;0]; [9;8;7;6;5;4;3;2;1;0] ] do
+    testEq xs (pipelined xs)
+  for i in 1 .. 20 do
+    match pipelined [0] with
+     | [0] -> ()
+     | ys -> failwithf "mapPipelinedJob race on [0] (iter %d): %A" i ys
+
   // The following are some quickly written naive property based test
 
   do let n = ref 0
