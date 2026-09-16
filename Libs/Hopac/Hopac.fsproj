@@ -2,27 +2,38 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <DebugType>Embedded</DebugType>
     <EmbedAllSources>True</EmbedAllSources>
     <OtherFlags>--warnon:1182</OtherFlags>
     <NoWarn>FS0044;FS0057</NoWarn>
+    <PackageId>HopacPlus</PackageId>
+    <PackageVersion Condition="'$(PackageVersion)' == ''">0.1.0</PackageVersion>
+    <Version>$(PackageVersion)</Version>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Authors>Enrique Casanovas</Authors>
+    <Company>The Otter Side</Company>
     <Description>Hopac is a library for higher-Order, parallel, asynchronous and concurrent programming in F#.
 
-Inspired by languages like Concurrent ML and Cilk, Hopac is a library for F# with the aim of making it easier to write efficient parallel, asynchronous, concurrent and reactive programs. Hopac is licensed under a MIT-style license. See project website for further information.</Description>
-    <PackageProjectUrl>https://github.com/Hopac/Hopac</PackageProjectUrl>
-    <Authors>Vesa Karvonen</Authors>
+Inspired by languages like Concurrent ML and Cilk, Hopac is a library for F# with the aim of making it easier to write efficient parallel, asynchronous, concurrent and reactive programs. Hopac is licensed under a MIT-style license. See project website for further information.
+
+This package is a fork of the original Hopac library by Vesa Karvonen.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <Copyright>© 2016 Vesa Karvonen, 2018 Open Source Contributors</Copyright>
-    <PackageTags>F# documentation fsi html</PackageTags>
-    <PackageIconUrl>https://avatars2.githubusercontent.com/u/10173903</PackageIconUrl>
-    <Version>0.5.1</Version>
-  
-</PropertyGroup>
+    <Copyright>© 2016 Vesa Karvonen, 2018 Open Source Contributors, The Otter Side</Copyright>
+    <PackageTags>F#;FSharp;Hopac;Hopac+;F#+;FSharpPlus;concurrency</PackageTags>
+    <PackageProjectUrl>https://github.com/eacasanovaspedre/Hopac</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/eacasanovaspedre/Hopac</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+  </PropertyGroup>
   
   <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
     <Compile Include="Util.fs" />
     <Compile Include="Hopac.fsi" />
     <Compile Include="Hopac.fs" />

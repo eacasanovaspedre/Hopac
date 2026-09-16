@@ -1,0 +1,119 @@
+name: Build and Publish
+
+on:
+  push:
+    branches: [master-plus]
+    tags: ['v*.*.*']
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  NUGET_FEED: https://api.nuget.org/v3/index.json
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+          cache: true
+          cache-dependency-path: '**/*.fsproj'
+
+      - name: Restore
+        run: |
+          dotnet restore Libs/Hopac/Hopac.fsproj
+          dotnet restore Tests/AdHocTests/AdHocTests.fsproj
+          dotnet restore Tests/FSharpPlusTests/FSharpPlusTests.fsproj
+
+      - name: Build
+        run: |
+          dotnet build Libs/Hopac/Hopac.fsproj -c Release --no-restore
+          dotnet build Tests/AdHocTests/AdHocTests.fsproj -c Release --no-restore
+          dotnet build Tests/FSharpPlusTests/FSharpPlusTests.fsproj -c Release --no-restore
+
+      - name: Test
+        run: |
+          dotnet run --project Tests/AdHocTests/AdHocTests.fsproj -c Release --no-build
+          dotnet run --project Tests/FSharpPlusTests/FSharpPlusTests.fsproj -c Release --no-build
+
+  publish:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    environment: nuget
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Pack
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          echo "Packing version ${VERSION}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "::error::Tag must be a SemVer version with a 'v' prefix (e.g. v1.2.3)."
+            exit 1
+          fi
+          dotnet pack Libs/Hopac/Hopac.fsproj \
+            -c Release \
+            -o nupkg \
+            -p:PackageVersion="$VERSION" \
+            -p:GeneratePackageOnBuild=false
+
+      - name: NuGet login
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER || secrets.NUGET_USER }}
+
+      - name: Push to NuGet.org
+        run: >
+          dotnet nuget push ./nupkg/*.nupkg
+          --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
+          --source ${{ env.NUGET_FEED }}
+          --skip-duplicate
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          PRE_FLAGS=()
+          if [[ "$VERSION" == *-* ]]; then
+            PRE_FLAGS=(--prerelease)
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" nupkg/* --clobber
+            if ((${#PRE_FLAGS[@]})); then
+              gh release edit "$TAG" "${PRE_FLAGS[@]}"
+            fi
+          else
+            gh release create "$TAG" nupkg/* --title "$TAG" --generate-notes "${PRE_FLAGS[@]}"
+          fi
