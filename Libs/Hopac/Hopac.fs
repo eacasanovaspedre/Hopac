@@ -1514,10 +1514,10 @@ module Job =
          wr.Handler <- yK'
          (x2yJ x).DoJob (&wr, yK')}
 
-  let inline usingAsyncJob (xJ: Job<'x>) (x2yJ: 'x -> #Job<'y>) =
+  let inline usingAsyncJob xJ x2yJ =
     bind (fun x -> usingAsync x x2yJ) xJ
 
-  let inline usingAsync' (x: 'x when 'x :> System.IAsyncDisposable) (x2yJ: 'x -> #Job<'y>) =
+  let usingAsync' (x: 'x when 'x :> System.IAsyncDisposable) (x2yJ: 'x -> #Job<'y>) =
     {new Job<'y> () with
       override yJ'.DoJob (wr, yK_) =
         let yK' = TryFinallyJobCont (fromUnitValueTask(fun () -> x.DisposeAsync ()), yK_)
@@ -1533,7 +1533,7 @@ module Job =
     (xs2yJ: 'x1 -> 'x2 -> #Job<'y>) =
       usingAsync' (u2x1 ()) (fun x1 -> usingAsync' (x12x2 x1) (fun x2 -> xs2yJ x1 x2))
 
-  let inline usingAsyncJob2' (x1J: Job<'x1>) (x12x2J: 'x1 -> Job<'x2>) (xs2yJ: 'x1 -> 'x2 -> #Job<'y>) =
+  let inline usingAsyncJob2' x1J ([<InlineIfLambda>] x12x2J) xs2yJ =
       usingAsyncJob' x1J (fun x1 -> usingAsyncJob' (x12x2J x1) (fun x2 -> xs2yJ x1 x2))
   
   let inline using (x: 'x when 'x :> IDisposable) (x2yJ: 'x -> #Job<'y>) =

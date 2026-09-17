@@ -505,7 +505,7 @@ module Job =
   /// runs; a failing dispose replaces the body exception, matching
   /// `tryFinallyJob`.  See also: `abort`, `using`, `usingAsync`,
   /// `usingAsync2'`.
-  val inline usingAsync': 'x -> ('x -> #Job<'y>) -> Job<'y>
+  val usingAsync': 'x -> ('x -> #Job<'y>) -> Job<'y>
                           when 'x :> System.IAsyncDisposable
 
   /// Like `usingAsync'`, but the resource is produced by a job.
@@ -533,7 +533,7 @@ module Job =
   /// Resources are acquired in order; if the second acquire fails, the first
   /// resource is still disposed.  Disposal is reverse-order and sequential.
   /// See also: `usingAsync2'`, `usingAsyncJob'`.
-  val inline usingAsyncJob2': Job<'x1> -> ('x1 -> Job<'x2>)
+  val inline usingAsyncJob2': Job<'x1> -> ('x1 -> #Job<'x2>)
                            -> ('x1 -> 'x2 -> #Job<'y>) -> Job<'y>
                               when 'x1 :> System.IAsyncDisposable
                               and  'x2 :> System.IAsyncDisposable
